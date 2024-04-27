@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easypaddleocr"
-version = "0.1.3"
+version = "0.1.4"
 authors = [
     { name = "pk5ls20" },
     { name = "hv0905" }
@@ -20,7 +20,7 @@ dependencies = [
     "imgaug",
     "pyclipper",
     "numpy",
-    "opencv-python",
+    "opencv-python-headless",
     "Pillow",
     "pyyaml",
     "torch",
