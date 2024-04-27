@@ -17,6 +17,7 @@ urls = {Code = "https://github.com/pk5ls20/EasyPaddleOCR", Documentation = "http
 dependencies = [
     "shapely",
     "scikit-image",
+    "six",
     "pyclipper",
     "numpy",
     "opencv-python-headless",
