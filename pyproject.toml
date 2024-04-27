@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easypaddleocr"
-version = "0.1.4"
+version = "0.1.5"
 authors = [
     { name = "pk5ls20" },
     { name = "hv0905" }
@@ -17,7 +17,7 @@ urls = {Code = "https://github.com/pk5ls20/EasyPaddleOCR", Documentation = "http
 dependencies = [
     "shapely",
     "scikit-image",
-    "imgaug",
+    "six",
     "pyclipper",
     "numpy",
     "opencv-python-headless",
