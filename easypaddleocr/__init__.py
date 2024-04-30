@@ -1,14 +1,13 @@
-import cv2
 import numpy as np
 import torch
 from huggingface_hub import hf_hub_download
 from loguru import logger
-
-from .infer_system import InferSystem
+from .predict_system import PredictSystem
 
 
 class EasyPaddleOCR:
-    def __init__(self, use_angle_cls=False, devices="auto", needWarmUp=False, warmup_size=(640, 640), **kwargs):
+    def __init__(self, use_angle_cls=False, devices="auto", needWarmUp=False,
+                 warmup_size=(640, 640), drop_score=0.5, **kwargs):
         """
         Initialize EasyPaddleOCR object with specified parameters.
         :param use_angle_cls: Whether to use angle classifier. This is used to detect text that is 180' rotated.
@@ -19,46 +18,41 @@ class EasyPaddleOCR:
         :param kwargs: other parameters to pass to InferSystem. See original PaddleOCR documentation for more details.
         """
         self._modelFileKeys = ["det_model_path", "rec_model_path", "cls_model_path",
-                               "det_model_config_path", "rec_model_config_path", "cls_model_config_path",
-                               "character_dict_path"]
+                               "det_model_config_path", "rec_model_config_path", "character_dict_path"]
         self._modelFilePaths = {key: kwargs.get(key, None) for key in self._modelFileKeys}
-        self._devices = devices
-        if self._devices == "auto":
-            self._devices = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"Using device: {self._devices}")
+        if devices == "auto":
+            self._use_gpu = True if torch.cuda.is_available() else False
+        else:
+            self._use_gpu = True if devices == "cuda" else False
+        logger.info(f"Using device: {devices}")
         self._download_file(self._modelFilePaths)
-        self.use_angle_cls = use_angle_cls
-        self.ocr = InferSystem(use_angle_cls=self.use_angle_cls,
-                               det_model_config=self._modelFilePaths["det_model_config_path"],
-                               det_model_name=self._modelFilePaths["det_model_path"],
-                               rec_model_config=self._modelFilePaths["rec_model_config_path"],
-                               rec_model_name=self._modelFilePaths["rec_model_path"],
-                               cls_model_config=self._modelFilePaths["cls_model_config_path"],
-                               cls_model_name=self._modelFilePaths["cls_model_path"],
-                               character_dict_path=self._modelFilePaths["character_dict_path"],
-                               drop_score=kwargs.get("drop_score", 0.5),
-                               det_box_type=kwargs.get("det_box_type", "quad"),
-                               save_crop_res=kwargs.get("save_crop_res", False),
-                               crop_res_save_dir=kwargs.get("crop_res_save_dir", "./output"),
-                               devices=self._devices)
+        self.ocr = PredictSystem(use_angle_cls=use_angle_cls,
+                                 det_yaml_path=self._modelFilePaths["det_model_config_path"],
+                                 det_model_path=self._modelFilePaths["det_model_path"],
+                                 rec_yaml_path=self._modelFilePaths["rec_model_config_path"],
+                                 rec_model_path=self._modelFilePaths["rec_model_path"],
+                                 cls_model_path=self._modelFilePaths["cls_model_path"],
+                                 rec_char_dict_path=self._modelFilePaths["character_dict_path"],
+                                 drop_score=drop_score,
+                                 use_gpu=self._use_gpu)
         self.needWarmUp = needWarmUp
         self._warm_up(warmup_size) if self.needWarmUp else None
 
     @staticmethod
     def _download_file(fileDict):
         config_default_dict = {
-            "det_model_path": "pt/ch_PP-OCRv4_det_server_train/best_accuracy.pth",
-            "rec_model_path": "pt/ch_PP-OCRv4_rec_server_train/best_accuracy.pth",
-            "cls_model_path": "pt/cls/best_accuracy.pth",
-            "det_model_config_path": "configs/det/ch_PP-OCRv4/ch_PP-OCRv4_det_teacher.yml",
-            "rec_model_config_path": "configs/rec/PP-OCRv4/ch_PP-OCRv4_rec_hgnet.yml",
-            "cls_model_config_path": "configs/cls/cls_mv3.yml",
+            "det_model_path": "PaddleOCR2Pytorch/ch_ptocr_v4_det_infer.pth",
+            "rec_model_path": "PaddleOCR2Pytorch/ch_ptocr_v4_rec_infer.pth",
+            "cls_model_path": "PaddleOCR2Pytorch/ch_ptocr_mobile_v2.0_cls_infer.pth",
+            "det_model_config_path": "PaddleOCR2Pytorch/configs/det/ch_PP-OCRv4/ch_PP-OCRv4_det_student.yml",
+            "rec_model_config_path": "PaddleOCR2Pytorch/configs/rec/PP-OCRv4/ch_PP-OCRv4_rec.yml",
             "character_dict_path": "ppocr_keys_v1.txt"
         }
         for key, val in fileDict.items():
             if not val:
                 logger.warning(f"Unspecified {key[:-5]}, using default value {config_default_dict[key]}")
                 fileDict[key] = hf_hub_download(repo_id="pk5ls20/PaddleModel", filename=config_default_dict[key])
+        logger.info(fileDict)
 
     def _warm_up(self, warmup_size):
         logger.info("Warm up started")
@@ -68,11 +62,3 @@ class EasyPaddleOCR:
         for i in range(10):
             _ = self.ocr(img)
         logger.info("Warm up finished")
-
-
-if __name__ == '__main__':
-    ocr = EasyPaddleOCR(use_angle_cls=True, needWarmUp=True)
-    image_path = r'C:\Users\pk5ls\Desktop\PytorchOCR\img\1_normal_1.jpeg'
-    image = cv2.imread(image_path)
-    image_ndarray = np.array(image)
-    print(ocr.ocr(image_ndarray))
