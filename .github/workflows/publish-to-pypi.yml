@@ -3,8 +3,7 @@ name: Publish Python 🐍 distribution 📦 to PyPI and TestPyPI
 on:
   push:
     tags:
-      - v1.**
-      - v2.**
+      - v0.**
   workflow_dispatch:
 
 jobs:
