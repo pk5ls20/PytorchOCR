@@ -1,3 +1,4 @@
+import pathlib
 import numpy as np
 import torch
 from huggingface_hub import hf_hub_download
@@ -6,7 +7,7 @@ from .predict_system import PredictSystem
 
 
 class EasyPaddleOCR:
-    def __init__(self, use_angle_cls=False, devices="auto", needWarmUp=False,
+    def __init__(self, use_angle_cls=False, devices="auto", model_local_dir=None, needWarmUp=False,
                  warmup_size=(640, 640), drop_score=0.5, **kwargs):
         """
         Initialize EasyPaddleOCR object with specified parameters.
@@ -15,8 +16,18 @@ class EasyPaddleOCR:
         :param needWarmUp: Whether to warm up the model. This will take some time.
         :param warmup_size: Size of the image to use in warm up. Please specify the **MAX** image size you want to
         inference with in this parameter when possible. This can reduce the usage of VMEM.
+        :param model_local_dir: Defaults to None, if filled, the model is loaded from the local folder
+        :param drop_score: Minimum score to keep the detected text.
         :param kwargs: other parameters to pass to InferSystem. See original PaddleOCR documentation for more details.
         """
+        self.config_default_dict = {
+            "det_model_path": "PaddleOCR2Pytorch/ch_ptocr_v4_det_infer.pth",
+            "rec_model_path": "PaddleOCR2Pytorch/ch_ptocr_v4_rec_infer.pth",
+            "cls_model_path": "PaddleOCR2Pytorch/ch_ptocr_mobile_v2.0_cls_infer.pth",
+            "det_model_config_path": "PaddleOCR2Pytorch/configs/det/ch_PP-OCRv4/ch_PP-OCRv4_det_student.yml",
+            "rec_model_config_path": "PaddleOCR2Pytorch/configs/rec/PP-OCRv4/ch_PP-OCRv4_rec.yml",
+            "character_dict_path": "ppocr_keys_v1.txt"
+        }
         self._modelFileKeys = ["det_model_path", "rec_model_path", "cls_model_path",
                                "det_model_config_path", "rec_model_config_path", "character_dict_path"]
         self._modelFilePaths = {key: kwargs.get(key, None) for key in self._modelFileKeys}
@@ -25,7 +36,11 @@ class EasyPaddleOCR:
         else:
             self._use_gpu = True if devices == "cuda" else False
         logger.info(f"Using device: {devices}")
-        self._download_file(self._modelFilePaths)
+        self._model_local_dir = model_local_dir
+        if self._model_local_dir:
+            self._load_local_file(self._modelFilePaths)
+        else:
+            self._download_file(self._modelFilePaths)
         self.ocr = PredictSystem(use_angle_cls=use_angle_cls,
                                  det_yaml_path=self._modelFilePaths["det_model_config_path"],
                                  det_model_path=self._modelFilePaths["det_model_path"],
@@ -38,20 +53,20 @@ class EasyPaddleOCR:
         self.needWarmUp = needWarmUp
         self._warm_up(warmup_size) if self.needWarmUp else None
 
-    @staticmethod
-    def _download_file(fileDict):
-        config_default_dict = {
-            "det_model_path": "PaddleOCR2Pytorch/ch_ptocr_v4_det_infer.pth",
-            "rec_model_path": "PaddleOCR2Pytorch/ch_ptocr_v4_rec_infer.pth",
-            "cls_model_path": "PaddleOCR2Pytorch/ch_ptocr_mobile_v2.0_cls_infer.pth",
-            "det_model_config_path": "PaddleOCR2Pytorch/configs/det/ch_PP-OCRv4/ch_PP-OCRv4_det_student.yml",
-            "rec_model_config_path": "PaddleOCR2Pytorch/configs/rec/PP-OCRv4/ch_PP-OCRv4_rec.yml",
-            "character_dict_path": "ppocr_keys_v1.txt"
-        }
+    def _load_local_file(self, fileDict):
         for key, val in fileDict.items():
             if not val:
-                logger.warning(f"Unspecified {key[:-5]}, using default value {config_default_dict[key]}")
-                fileDict[key] = hf_hub_download(repo_id="pk5ls20/PaddleModel", filename=config_default_dict[key])
+                logger.warning(f"Unspecified {key[:-5]}, using default value {self.config_default_dict[key]}")
+                fileDict[key] = pathlib.Path(self._model_local_dir, self.config_default_dict[key])
+                if not fileDict[key].exists():
+                    raise FileNotFoundError(f"File {fileDict[key]} not found.")
+        logger.info(fileDict)
+
+    def _download_file(self, fileDict):
+        for key, val in fileDict.items():
+            if not val:
+                logger.warning(f"Unspecified {key[:-5]}, using default value {self.config_default_dict[key]}")
+                fileDict[key] = hf_hub_download(repo_id="pk5ls20/PaddleModel", filename=self.config_default_dict[key])
         logger.info(fileDict)
 
     def _warm_up(self, warmup_size):
